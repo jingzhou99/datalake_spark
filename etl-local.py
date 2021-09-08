@@ -21,6 +21,8 @@ os.environ['AWS_SECRET_ACCESS_KEY']=config.get('AWS','AWS_SECRET_ACCESS_KEY')
 
 # create spark session
 def create_spark_session():
+    """create a spark session """
+
     spark = SparkSession \
         .builder \
         .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:2.7.0") \
@@ -30,6 +32,16 @@ def create_spark_session():
 
 
 def process_song_data(spark, song_data, output_path):
+    """load song from s3, process and write back to `songs` and `artists` table 
+    
+    Args:
+        spark(sparkSession): sparkSession created in function create_spark_session()
+        input_path(str): path of source files 
+        output_path(str): path of output dimensional tables 
+    
+    Return:
+        None
+    """
    
     # custom schema , then load json
     songschema = StructType([
@@ -65,6 +77,16 @@ def process_song_data(spark, song_data, output_path):
 
     
 def process_log_data(spark, logs_data, output_path):
+    """load song from s3, process and write back to `users`,`time` and `songplays` table 
+    
+    Args:
+        spark(sparkSession): sparkSession created in function create_spark_session()
+        input_path(str): path of source files 
+        output_path(str): path of output dimensional tables 
+    
+    Return:
+        None
+    """
 
     # read log data file
     log_df = spark.read.json(logs_data)
@@ -145,6 +167,7 @@ def process_log_data(spark, logs_data, output_path):
     
 def main():
     """Spark to create Data Warehouse, process json file and output parquet """
+
     # create spark session
     spark = create_spark_session()
     

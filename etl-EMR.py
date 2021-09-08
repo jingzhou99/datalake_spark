@@ -162,6 +162,7 @@ def process_log_data(spark, input_path, output_path):
     
 def main():
     """Spark to create Data Warehouse, process json file and output parquet """
+
     # create spark session
     spark = create_spark_session()
     
