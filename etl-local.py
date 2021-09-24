@@ -21,8 +21,6 @@ os.environ['AWS_SECRET_ACCESS_KEY']=config.get('AWS','AWS_SECRET_ACCESS_KEY')
 
 # create spark session
 def create_spark_session():
-    """create a spark session """
-
     spark = SparkSession \
         .builder \
         .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:2.7.0") \
@@ -32,16 +30,6 @@ def create_spark_session():
 
 
 def process_song_data(spark, song_data, output_path):
-    """load song from s3, process and write back to `songs` and `artists` table 
-    
-    Args:
-        spark(sparkSession): sparkSession created in function create_spark_session()
-        input_path(str): path of source files 
-        output_path(str): path of output dimensional tables 
-    
-    Return:
-        None
-    """
    
     # custom schema , then load json
     songschema = StructType([
@@ -61,14 +49,14 @@ def process_song_data(spark, song_data, output_path):
     
     
     # extract columns to create songs table
-    songs_table = song_df.select(["song_id","title","artist_id","year","duration"]).dropDuplicates()
+    songs_table = song_df.select(["song_id","title","artist_id","year","duration"]).dropDuplicates(["song_id"])
     
     # write songs table to parquet files partitioned by year and artist
     songs_table_output_patch = output_path + 'songs.parquet'
     songs_table.write.partitionBy("year","artist_id").mode("overwrite").parquet(songs_table_output_patch) 
 
     # extract columns to create artists table
-    artists_table = song_df.select(["artist_id","artist_name","artist_location","artist_latitude","artist_longitude"]).dropDuplicates()
+    artists_table = song_df.select(["artist_id","artist_name","artist_location","artist_latitude","artist_longitude"]).dropDuplicates(["artist_id"])
     
     # write artists table to parquet files
     artists_table_output_patch = output_path +'artists.parquet'
@@ -77,16 +65,6 @@ def process_song_data(spark, song_data, output_path):
 
     
 def process_log_data(spark, logs_data, output_path):
-    """load song from s3, process and write back to `users`,`time` and `songplays` table 
-    
-    Args:
-        spark(sparkSession): sparkSession created in function create_spark_session()
-        input_path(str): path of source files 
-        output_path(str): path of output dimensional tables 
-    
-    Return:
-        None
-    """
 
     # read log data file
     log_df = spark.read.json(logs_data)
@@ -101,7 +79,7 @@ def process_log_data(spark, logs_data, output_path):
 
     # extract columns for users table, and dropDuplicates    
     user_table = log_newschema_df.select(["userId","firstName","lastName","gender","level"])
-    unique_user_table = user_table.dropDuplicates()
+    unique_user_table = user_table.dropDuplicates(["userId"])
     
     # write users table to parquet files
     users_table_output_patch = output_path + 'users.parquet'
@@ -123,11 +101,11 @@ def process_log_data(spark, logs_data, output_path):
     .withColumn("year", year(col("datetime"))) \
     .withColumn("dow", dayofweek(col("datetime")))\
     
-    time_table = t3.select(["start_time","hour","day","week","month","year","dow"]).dropDuplicates()
+    time_table = t3.select(["start_time","hour","day","week","month","year","dow"]).dropDuplicates(["start_time"])
     
     # write time table to parquet files partitioned by year and month
     time_table_output_patch = output_path + 'time.parquet'
-    time_table.write.mode("overwrite").parquet(time_table_output_patch)
+    time_table.write.partitionBy(["year","month"]).mode("overwrite").parquet(time_table_output_patch)
 
     
     
@@ -136,9 +114,13 @@ def process_log_data(spark, logs_data, output_path):
     song_parquet_df = spark.read.parquet(songs_table_output_patch)
     song_parquet_df.createOrReplaceTempView("song_parquet_view")
     
-    artists_table_output_patch = output_path +'artists.parquet'
+    artists_table_output_patch = output_path + 'artists.parquet'
     artist_parquet_df = spark.read.parquet(artists_table_output_patch)
     artist_parquet_df.createOrReplaceTempView("artist_parquet_view")
+    
+    time_table_output_patch = output_path + 'time.parquet'
+    time_parquet_df = spark.read.parquet(time_table_output_patch)
+    time_parquet_df.createOrReplaceTempView("time_parquet_view")
     
     log_newschema_df.createOrReplaceTempView("logview")
     
@@ -151,23 +133,26 @@ def process_log_data(spark, logs_data, output_path):
                 B.artist_id,
                 A.sessionId,
                 A.location,
-                A.userAgent
+                A.userAgent,
+                D.year,
+                D.month
         FROM    logview A
                     INNER JOIN
                 song_parquet_view B ON A.song=B.title AND A.length=B.duration
                     INNER JOIN
                 artist_parquet_view C ON A.artist=C.artist_name
+                    INNER JOIN
+                time_parquet_view D ON A.ts = D.start_time
         """)
 
     # write songplays table to parquet files partitioned by year and month
     songplays_table_output_patch = output_path + 'songplays.parquet'
-    songplays.write.mode("overwrite").parquet(songplays_table_output_patch) 
+    songplays.write.partitionBy(["year","month"]).mode("overwrite").parquet(songplays_table_output_patch) 
 
     
     
 def main():
     """Spark to create Data Warehouse, process json file and output parquet """
-
     # create spark session
     spark = create_spark_session()
     
